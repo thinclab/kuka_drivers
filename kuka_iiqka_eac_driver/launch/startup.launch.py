@@ -23,6 +23,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def launch_setup(context, *args, **kwargs):
     robot_model = LaunchConfiguration("robot_model")
+    robot_urdf_folder = LaunchConfiguration("robot_urdf_folder")
     controller_ip = LaunchConfiguration("controller_ip")
     client_ip = LaunchConfiguration("client_ip")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
@@ -50,7 +51,7 @@ def launch_setup(context, *args, **kwargs):
             " ",
             PathJoinSubstitution(
                 [
-                    FindPackageShare("kuka_lbr_iisy_support"),
+                    FindPackageShare(robot_urdf_folder.perform(context)),
                     "urdf",
                     robot_model.perform(context) + ".urdf.xacro",
                 ]
@@ -106,18 +107,7 @@ def launch_setup(context, *args, **kwargs):
         namespace=ns,
         package="kuka_drivers_core",
         executable="control_node",
-        parameters=[
-            robot_description,
-            controller_config,
-            jtc_config,
-            jic_config,
-            ec_config,
-            {
-                "hardware_components_initial_state": {
-                    "unconfigured": [tf_prefix + robot_model.perform(context)]
-                },
-            },
-        ],
+        parameters=[robot_description, controller_config, jtc_config, jic_config, ec_config],
     )
     robot_manager_node = LifecycleNode(
         name=["robot_manager"],
@@ -159,7 +149,6 @@ def launch_setup(context, *args, **kwargs):
         "joint_group_impedance_controller",
         "effort_controller",
         "control_mode_handler",
-        "event_broadcaster",
     ]
 
     controller_spawners = [controller_spawner(name) for name in controller_names]
@@ -176,8 +165,9 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description():
     launch_arguments = []
     launch_arguments.append(DeclareLaunchArgument("robot_model", default_value="lbr_iisy3_r760"))
+    launch_arguments.append(DeclareLaunchArgument("robot_urdf_folder", default_value="kuka_lbr_iisy_support"))
     launch_arguments.append(DeclareLaunchArgument("controller_ip", default_value="0.0.0.0"))
-    launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="0.0.0.0"))
+    launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="172.19.52.144"))
     launch_arguments.append(DeclareLaunchArgument("use_fake_hardware", default_value="false"))
     launch_arguments.append(DeclareLaunchArgument("namespace", default_value=""))
     launch_arguments.append(DeclareLaunchArgument("x", default_value="0"))
