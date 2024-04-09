@@ -1,5 +1,5 @@
 # Copyright 2022 Áron Svastits
-#
+# Updated 2024 Prasanth Suresh
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -26,7 +26,9 @@ from launch.substitutions import LaunchConfiguration
 def launch_setup(context, *args, **kwargs):
     robot_model = LaunchConfiguration("robot_model")
     robot_urdf_folder = LaunchConfiguration("robot_urdf_folder")
-    robot_srdf_folder = LaunchConfiguration("robot_srdf_folder")
+    robot_urdf_filepath = LaunchConfiguration("robot_urdf_filepath")    
+    robot_srdf_folder = LaunchConfiguration("robot_srdf_folder")        
+    robot_srdf_filepath = LaunchConfiguration("robot_srdf_filepath")  
     controller_ip = LaunchConfiguration("controller_ip")
     client_ip = LaunchConfiguration("client_ip")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
@@ -48,7 +50,7 @@ def launch_setup(context, *args, **kwargs):
         .robot_description(
             # file_path=get_package_share_directory("kuka_lbr_iisy_support")
             file_path=get_package_share_directory(robot_urdf_folder.perform(context))
-            + f"/urdf/{robot_model.perform(context)}.urdf.xacro",
+            + robot_urdf_filepath.perform(context),
             mappings={
                 "x": x.perform(context),
                 "y": y.perform(context),
@@ -61,7 +63,7 @@ def launch_setup(context, *args, **kwargs):
         )
         .robot_description_semantic(
             get_package_share_directory(robot_srdf_folder.perform(context))
-            + f"/urdf/{robot_model.perform(context)}.srdf"
+            + robot_srdf_filepath.perform(context)
         )
         .robot_description_kinematics(file_path="config/kinematics.yaml")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
@@ -86,6 +88,7 @@ def launch_setup(context, *args, **kwargs):
         launch_arguments = {
             'robot_model' : robot_model,
             'robot_urdf_folder' : robot_urdf_folder,
+            'robot_urdf_filepath' : robot_urdf_filepath,
             'controller_ip' : controller_ip,
             'client_ip' : client_ip,
             'use_fake_hardware' : use_fake_hardware,
@@ -122,7 +125,9 @@ def generate_launch_description():
     launch_arguments = []
     launch_arguments.append(DeclareLaunchArgument("robot_model", default_value="lbr_iisy3_r760"))
     launch_arguments.append(DeclareLaunchArgument("robot_urdf_folder", default_value="kuka_lbr_iisy_support"))
+    launch_arguments.append(DeclareLaunchArgument("robot_urdf_filepath", default_value=f"/urdf/lbr_iisy3_r760.urdf.xacro"))
     launch_arguments.append(DeclareLaunchArgument("robot_srdf_folder", default_value="kuka_lbr_iisy_moveit_config"))
+    launch_arguments.append(DeclareLaunchArgument("robot_srdf_filepath", default_value=f"/urdf/lbr_iisy3_r760.srdf"))
     launch_arguments.append(DeclareLaunchArgument("controller_ip", default_value="0.0.0.0"))
     launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="0.0.0.0"))
     launch_arguments.append(DeclareLaunchArgument("use_fake_hardware", default_value="false"))
