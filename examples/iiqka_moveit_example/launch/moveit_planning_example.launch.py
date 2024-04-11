@@ -68,7 +68,9 @@ def launch_setup(context, *args, **kwargs):
         .robot_description_kinematics(file_path="config/kinematics.yaml")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
         .planning_scene_monitor(
-            publish_robot_description=True, publish_robot_description_semantic=True
+            publish_robot_description=True, publish_robot_description_semantic=True,
+            publish_planning_scene=True, publish_geometry_updates=True, 
+            publish_state_updates=True, publish_transforms_updates=True
         )
         .joint_limits(
             file_path=get_package_share_directory("kuka_lbr_iisy_support")
@@ -115,6 +117,13 @@ def launch_setup(context, *args, **kwargs):
         name="rviz2",
         output="log",
         arguments=["-d", rviz_config_file, "--ros-args", "--log-level", "error"],
+        parameters=[
+            # moveit_config.robot_description,
+            # moveit_config.robot_description_semantic,
+            # moveit_config.robot_description_kinematics,
+            # moveit_config.planning_pipelines,
+            # moveit_config.joint_limits,
+        ],
     )
 
     to_start = [startup_launch, move_group_server, rviz]
