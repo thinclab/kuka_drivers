@@ -1,34 +1,23 @@
-# Copyright 2022 Áron Svastits
-# Updated 2024 Prasanth Suresh
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+import os
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from ament_index_python.packages import get_package_share_directory
-from moveit_configs_utils import MoveItConfigsBuilder
 from launch.actions.include_launch_description import IncludeLaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
-from launch.launch_description_sources.python_launch_description_source import (
-    PythonLaunchDescriptionSource,
-)
-from launch.substitutions import LaunchConfiguration
+from launch.launch_description_sources.python_launch_description_source import PythonLaunchDescriptionSource
+from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, LaunchConfiguration
+from launch_ros.substitutions import FindPackageShare
+from launch_ros.parameter_descriptions import ParameterValue
+from moveit_configs_utils import MoveItConfigsBuilder
 
 def launch_setup(context, *args, **kwargs):
     robot_model = LaunchConfiguration("robot_model")
     robot_urdf_folder = LaunchConfiguration("robot_urdf_folder")
-    robot_urdf_filepath = LaunchConfiguration("robot_urdf_filepath")    
-    robot_srdf_folder = LaunchConfiguration("robot_srdf_folder")        
-    robot_srdf_filepath = LaunchConfiguration("robot_srdf_filepath")  
+    robot_urdf_filepath = LaunchConfiguration("robot_urdf_filepath")
+    robot_srdf_folder = LaunchConfiguration("robot_srdf_folder")
+    robot_srdf_filepath = LaunchConfiguration("robot_srdf_filepath")
+    robot_kinematics_folder = LaunchConfiguration("robot_kinematics_folder")
     controller_ip = LaunchConfiguration("controller_ip")
     client_ip = LaunchConfiguration("client_ip")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
@@ -48,7 +37,6 @@ def launch_setup(context, *args, **kwargs):
     moveit_config = (
         MoveItConfigsBuilder("kuka_lbr_iisy")
         .robot_description(
-            # file_path=get_package_share_directory("kuka_lbr_iisy_support")
             file_path=get_package_share_directory(robot_urdf_folder.perform(context))
             + robot_urdf_filepath.perform(context),
             mappings={
@@ -65,12 +53,20 @@ def launch_setup(context, *args, **kwargs):
             get_package_share_directory(robot_srdf_folder.perform(context))
             + robot_srdf_filepath.perform(context)
         )
-        .robot_description_kinematics(file_path="config/kinematics.yaml")
-        .trajectory_execution(file_path="config/moveit_controllers.yaml")
+        .robot_description_kinematics(
+            get_package_share_directory(robot_kinematics_folder.perform(context))
+            + "/config/kinematics.yaml"
+        )
+        .trajectory_execution(
+            file_path=f"{get_package_share_directory(robot_kinematics_folder.perform(context))}/config/moveit_controllers.yaml"
+        )
         .planning_scene_monitor(
-            publish_robot_description=True, publish_robot_description_semantic=True,
-            publish_planning_scene=True, publish_geometry_updates=True, 
-            publish_state_updates=True, publish_transforms_updates=True
+            publish_robot_description=True,
+            publish_robot_description_semantic=True,
+            publish_planning_scene=True,
+            publish_geometry_updates=True,
+            publish_state_updates=True,
+            publish_transforms_updates=True
         )
         .joint_limits(
             file_path=get_package_share_directory("kuka_lbr_iisy_support")
@@ -87,20 +83,20 @@ def launch_setup(context, *args, **kwargs):
         PythonLaunchDescriptionSource(
             [get_package_share_directory("kuka_iiqka_eac_driver"), "/launch/startup.launch.py"]
         ),
-        launch_arguments = {
-            'robot_model' : robot_model,
-            'robot_urdf_folder' : robot_urdf_folder,
-            'robot_urdf_filepath' : robot_urdf_filepath,
-            'controller_ip' : controller_ip,
-            'client_ip' : client_ip,
-            'use_fake_hardware' : use_fake_hardware,
-            'ns' : ns,
-            'x' : x,
-            'y' : y,
-            'z' : z,
-            'roll' : roll,
-            'pitch' : pitch,
-            'yaw' : yaw,   
+        launch_arguments={
+            'robot_model': robot_model,
+            'robot_urdf_folder': robot_urdf_folder,
+            'robot_urdf_filepath': robot_urdf_filepath,
+            'controller_ip': controller_ip,
+            'client_ip': client_ip,
+            'use_fake_hardware': use_fake_hardware,
+            'ns': ns,
+            'x': x,
+            'y': y,
+            'z': z,
+            'roll': roll,
+            'pitch': pitch,
+            'yaw': yaw,
         }.items(),
     )
 
@@ -108,7 +104,10 @@ def launch_setup(context, *args, **kwargs):
         package="moveit_ros_move_group",
         executable="move_group",
         output="screen",
-        parameters=[moveit_config.to_dict(), {"publish_planning_scene_hz": 30.0}],
+        parameters=[
+            moveit_config.to_dict(),
+            {"publish_planning_scene_hz": 30.0},
+        ],
     )
 
     rviz = Node(
@@ -117,18 +116,9 @@ def launch_setup(context, *args, **kwargs):
         name="rviz2",
         output="log",
         arguments=["-d", rviz_config_file, "--ros-args", "--log-level", "error"],
-        parameters=[
-            # moveit_config.robot_description,
-            # moveit_config.robot_description_semantic,
-            # moveit_config.robot_description_kinematics,
-            # moveit_config.planning_pipelines,
-            # moveit_config.joint_limits,
-        ],
     )
 
-    to_start = [startup_launch, move_group_server, rviz]
-
-    return to_start
+    return [startup_launch, move_group_server, rviz]
 
 def generate_launch_description():
     launch_arguments = []
@@ -137,6 +127,7 @@ def generate_launch_description():
     launch_arguments.append(DeclareLaunchArgument("robot_urdf_filepath", default_value=f"/urdf/lbr_iisy3_r760.urdf.xacro"))
     launch_arguments.append(DeclareLaunchArgument("robot_srdf_folder", default_value="kuka_lbr_iisy_moveit_config"))
     launch_arguments.append(DeclareLaunchArgument("robot_srdf_filepath", default_value=f"/urdf/lbr_iisy3_r760.srdf"))
+    launch_arguments.append(DeclareLaunchArgument("robot_kinematics_folder", default_value="kuka_lbr_iisy_moveit_config"))
     launch_arguments.append(DeclareLaunchArgument("controller_ip", default_value="0.0.0.0"))
     launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="0.0.0.0"))
     launch_arguments.append(DeclareLaunchArgument("use_fake_hardware", default_value="false"))
