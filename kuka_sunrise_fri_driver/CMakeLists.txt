@@ -6,9 +6,9 @@ if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
 
-# Default to C++14
+# C++17 needed for string_view
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -17,19 +17,21 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(ament_cmake_python REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclcpp_lifecycle REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
-find_package(sensor_msgs REQUIRED)
 find_package(kuka_driver_interfaces REQUIRED)
 find_package(kuka_drivers_core REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(controller_manager_msgs)
+find_package(std_msgs)
+find_package(std_srvs)
+find_package(nanopb REQUIRED)
 
-include_directories(include src/fri_client_sdk)
+find_path(NANOPB_INCLUDE_DIR
+  NAMES pb.h
+  PATHS /usr/include/nanopb /usr/local/include/nanopb
+)
+
+include_directories(include src/fri_client_sdk ${NANOPB_INCLUDE_DIR})
 
 add_library(fri_connection SHARED
   src/connection_helpers/fri_connection.cpp
@@ -80,38 +82,30 @@ add_library(${PROJECT_NAME} SHARED
 # which is appropriate when building the dll but not consuming it.
 target_compile_definitions(${PROJECT_NAME} PRIVATE "KUKA_SUNRISE_FRI_DRIVER_BUILDING_LIBRARY")
 
-ament_target_dependencies(${PROJECT_NAME} kuka_driver_interfaces rclcpp rclcpp_lifecycle hardware_interface kuka_drivers_core)
-target_link_libraries(${PROJECT_NAME} fri_client_sdk)
-
-add_library(configuration_manager SHARED
-  src/connection_helpers/configuration_manager.cpp)
-ament_target_dependencies(configuration_manager kuka_driver_interfaces rclcpp rclcpp_lifecycle std_msgs std_srvs kuka_drivers_core
-  controller_manager_msgs)
+ament_target_dependencies(${PROJECT_NAME} kuka_driver_interfaces hardware_interface kuka_drivers_core)
+target_link_libraries(${PROJECT_NAME} fri_client_sdk fri_connection)
 
 add_executable(robot_manager_node
   src/robot_manager_node.cpp)
-ament_target_dependencies(robot_manager_node kuka_driver_interfaces rclcpp rclcpp_lifecycle kuka_drivers_core controller_manager_msgs)
-target_link_libraries(robot_manager_node
-  fri_connection
-  configuration_manager)
+ament_target_dependencies(robot_manager_node kuka_driver_interfaces kuka_drivers_core std_msgs std_srvs
+  controller_manager_msgs)
+
 
 pluginlib_export_plugin_description_file(hardware_interface hardware_interface.xml)
 
 install(TARGETS ${PROJECT_NAME} robot_manager_node
   DESTINATION lib/${PROJECT_NAME})
 
-install(TARGETS fri_connection fri_client_sdk configuration_manager
+install(TARGETS fri_connection fri_client_sdk
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(DIRECTORY launch config test
   DESTINATION share/${PROJECT_NAME})
 
-install(DIRECTORY config
-  DESTINATION share/${PROJECT_NAME})
-
 if(BUILD_TESTING)
   find_package(launch_testing_ament_cmake)
+  add_launch_test(test/test_driver_activation.py)
   add_launch_test(test/test_driver_startup.py)
   add_launch_test(test/test_multi_robot_startup.py)
 endif()

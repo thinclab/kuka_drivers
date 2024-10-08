@@ -1,5 +1,5 @@
-# Copyright 2022 Áron Svastits
-# Updated 2024 Prasanth Suresh
+# Copyright 2022 Aron Svastits
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -19,13 +19,10 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, LaunchConfiguration
 from launch_ros.actions import Node, LifecycleNode
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.descriptions import ParameterValue
 
 
 def launch_setup(context, *args, **kwargs):
     robot_model = LaunchConfiguration("robot_model")
-    robot_urdf_folder = LaunchConfiguration("robot_urdf_folder")
-    robot_urdf_filepath = LaunchConfiguration("robot_urdf_filepath") 
     controller_ip = LaunchConfiguration("controller_ip")
     client_ip = LaunchConfiguration("client_ip")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
@@ -36,6 +33,7 @@ def launch_setup(context, *args, **kwargs):
     roll = LaunchConfiguration("roll")
     pitch = LaunchConfiguration("pitch")
     yaw = LaunchConfiguration("yaw")
+    roundtrip_time = LaunchConfiguration("roundtrip_time")
     qos_config = LaunchConfiguration("qos_config")
     controller_config = LaunchConfiguration("controller_config")
     jtc_config = LaunchConfiguration("jtc_config")
@@ -45,7 +43,7 @@ def launch_setup(context, *args, **kwargs):
         tf_prefix = ""
     else:
         tf_prefix = ns.perform(context) + "_"
-        
+
     # Get URDF via xacro
     robot_description_content = Command(
         [
@@ -53,10 +51,9 @@ def launch_setup(context, *args, **kwargs):
             " ",
             PathJoinSubstitution(
                 [
-                    FindPackageShare(robot_urdf_folder.perform(context)),
-                    # "urdf",
-                    robot_urdf_filepath.perform(context).split("/")[1],
-                    robot_urdf_filepath.perform(context).split("/")[2],
+                    FindPackageShare("kuka_lbr_iisy_support"),
+                    "urdf",
+                    robot_model.perform(context) + ".urdf.xacro",
                 ]
             ),
             " ",
@@ -90,6 +87,9 @@ def launch_setup(context, *args, **kwargs):
             "yaw:=",
             yaw,
             " ",
+            "roundtrip_time:=",
+            roundtrip_time,
+            " ",
             "qos_config_file:=",
             qos_config,
         ],
@@ -97,8 +97,7 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # Get URDF via xacro
-    robot_description = {"robot_description": ParameterValue(robot_description_content, value_type=str)}
-    # robot_description = {"robot_description": robot_description_content}
+    robot_description = {"robot_description": robot_description_content}
 
     # The driver config contains only parameters that can be changed after startup
     driver_config = (
@@ -111,7 +110,18 @@ def launch_setup(context, *args, **kwargs):
         namespace=ns,
         package="kuka_drivers_core",
         executable="control_node",
-        parameters=[robot_description, controller_config, jtc_config, jic_config, ec_config],
+        parameters=[
+            robot_description,
+            controller_config,
+            jtc_config,
+            jic_config,
+            ec_config,
+            {
+                "hardware_components_initial_state": {
+                    "unconfigured": [tf_prefix + robot_model.perform(context)]
+                },
+            },
+        ],
     )
     robot_manager_node = LifecycleNode(
         name=["robot_manager"],
@@ -153,6 +163,7 @@ def launch_setup(context, *args, **kwargs):
         "joint_group_impedance_controller",
         "effort_controller",
         "control_mode_handler",
+        "event_broadcaster",
     ]
 
     controller_spawners = [controller_spawner(name) for name in controller_names]
@@ -169,10 +180,8 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description():
     launch_arguments = []
     launch_arguments.append(DeclareLaunchArgument("robot_model", default_value="lbr_iisy3_r760"))
-    launch_arguments.append(DeclareLaunchArgument("robot_urdf_folder", default_value="kuka_lbr_iisy_support"))
-    launch_arguments.append(DeclareLaunchArgument("robot_urdf_filepath", default_value=f"/urdf/lbr_iisy3_r760.urdf.xacro"))
     launch_arguments.append(DeclareLaunchArgument("controller_ip", default_value="0.0.0.0"))
-    launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="172.19.52.144"))
+    launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="0.0.0.0"))
     launch_arguments.append(DeclareLaunchArgument("use_fake_hardware", default_value="false"))
     launch_arguments.append(DeclareLaunchArgument("namespace", default_value=""))
     launch_arguments.append(DeclareLaunchArgument("x", default_value="0"))
@@ -181,6 +190,7 @@ def generate_launch_description():
     launch_arguments.append(DeclareLaunchArgument("roll", default_value="0"))
     launch_arguments.append(DeclareLaunchArgument("pitch", default_value="0"))
     launch_arguments.append(DeclareLaunchArgument("yaw", default_value="0"))
+    launch_arguments.append(DeclareLaunchArgument("roundtrip_time", default_value="2500"))
     launch_arguments.append(
         DeclareLaunchArgument(
             "qos_config",
