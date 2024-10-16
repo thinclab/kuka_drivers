@@ -23,6 +23,8 @@ from launch_ros.substitutions import FindPackageShare
 
 def launch_setup(context, *args, **kwargs):
     robot_model = LaunchConfiguration("robot_model")
+    robot_urdf_folder = LaunchConfiguration("robot_urdf_folder")
+    robot_urdf_filepath = LaunchConfiguration("robot_urdf_filepath") 
     controller_ip = LaunchConfiguration("controller_ip")
     client_ip = LaunchConfiguration("client_ip")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
@@ -51,9 +53,9 @@ def launch_setup(context, *args, **kwargs):
             " ",
             PathJoinSubstitution(
                 [
-                    FindPackageShare("kuka_lbr_iisy_support"),
-                    "urdf",
-                    robot_model.perform(context) + ".urdf.xacro",
+                    FindPackageShare(robot_urdf_folder.perform(context)),
+                    robot_urdf_filepath.perform(context).split("/")[1],
+                    robot_urdf_filepath.perform(context).split("/")[2],
                 ]
             ),
             " ",
@@ -113,9 +115,6 @@ def launch_setup(context, *args, **kwargs):
         parameters=[
             robot_description,
             controller_config,
-            jtc_config,
-            jic_config,
-            ec_config,
             {
                 "hardware_components_initial_state": {
                     "unconfigured": [tf_prefix + robot_model.perform(context)]
@@ -145,28 +144,36 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # Spawn controllers
-    def controller_spawner(controller_names, activate=False):
+    def controller_spawner(controller_name, param_file=None, activate=False):
         arg_list = [
-            controller_names,
+            controller_name,
             "-c",
             controller_manager_node,
             "-n",
             ns,
         ]
+
+        # Add param-file if it's provided
+        if param_file:
+            arg_list.extend(["--param-file", param_file])
+
         if not activate:
             arg_list.append("--inactive")
+
         return Node(package="controller_manager", executable="spawner", arguments=arg_list)
 
-    controller_names = [
-        "joint_state_broadcaster",
-        "joint_trajectory_controller",
-        "joint_group_impedance_controller",
-        "effort_controller",
-        "control_mode_handler",
-        "event_broadcaster",
-    ]
+    controllers = {
+        "joint_state_broadcaster": None,
+        "joint_trajectory_controller": jtc_config,
+        "joint_group_impedance_controller": jic_config,
+        "effort_controller": ec_config,
+        "control_mode_handler": None,
+        "event_broadcaster": None,
+    }
 
-    controller_spawners = [controller_spawner(name) for name in controller_names]
+    controller_spawners = [
+        controller_spawner(name, param_file) for name, param_file in controllers.items()
+    ]
 
     nodes_to_start = [
         control_node,
@@ -180,8 +187,10 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description():
     launch_arguments = []
     launch_arguments.append(DeclareLaunchArgument("robot_model", default_value="lbr_iisy3_r760"))
-    launch_arguments.append(DeclareLaunchArgument("controller_ip", default_value="0.0.0.0"))
-    launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="0.0.0.0"))
+    launch_arguments.append(DeclareLaunchArgument("robot_urdf_folder", default_value="kuka_lbr_iisy_support"))
+    launch_arguments.append(DeclareLaunchArgument("robot_urdf_filepath", default_value=f"/urdf/lbr_iisy3_r760.urdf.xacro"))
+    launch_arguments.append(DeclareLaunchArgument("controller_ip", default_value="192.168.1.244"))
+    launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="192.168.1.151"))
     launch_arguments.append(DeclareLaunchArgument("use_fake_hardware", default_value="false"))
     launch_arguments.append(DeclareLaunchArgument("namespace", default_value=""))
     launch_arguments.append(DeclareLaunchArgument("x", default_value="0"))
