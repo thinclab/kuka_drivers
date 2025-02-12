@@ -89,7 +89,7 @@ def launch_setup(context, *args, **kwargs):
     )
 
     rviz_config_file = (
-        get_package_share_directory("kuka_resources") + "/config/view_6_axis_planning_scene.rviz"
+        get_package_share_directory("kuka_resources") + f"/config/planning_6_axis.rviz"
     )
 
     startup_launch = IncludeLaunchDescription(
