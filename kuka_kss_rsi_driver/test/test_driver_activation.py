@@ -36,14 +36,20 @@ def generate_test_description():
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     [
-                        get_package_share_directory("kuka_sunrise_fri_driver"),
+                        get_package_share_directory("kuka_kss_rsi_driver"),
                         "/launch/",
                         "startup.launch.py",
                     ]
-                ),
-                launch_arguments={
-                    "use_fake_hardware": "true",
-                }.items(),
+                )
+            ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    [
+                        get_package_share_directory("kuka_rsi_simulator"),
+                        "/launch/",
+                        "kuka_rsi_simulator.launch.py",
+                    ]
+                )
             ),
             launch.actions.TimerAction(
                 period=10.0,
@@ -73,21 +79,12 @@ class TestDriverActivation(unittest.TestCase):
         # Check for successful initialization
         proc_output.assertWaitFor("Robot initialized", timeout=5)
         proc_output.assertWaitFor(
-            "Successful initialization of hardware 'lbr_iiwa14_r820'", timeout=5
+            "Successful initialization of hardware 'kr6_r700_sixx'", timeout=5
         )
         # Check whether disabling automatic activation was successful
         proc_output.assertWaitFor(
-            "Setting component 'lbr_iiwa14_r820' to 'unconfigured' state.", timeout=5
+            "Setting component 'kr6_r700_sixx' to 'unconfigured' state.", timeout=5
         )
         # Check for successful configuration and activation
-<<<<<<<< HEAD:kuka_sunrise_fri_driver/test/test_driver_activation.py
-        proc_output.assertWaitFor(
-            "Successful 'configure' of hardware 'lbr_iiwa14_r820'", timeout=15
-        )
-        proc_output.assertWaitFor(
-            "Successful 'activate' of hardware 'lbr_iiwa14_r820'", timeout=20
-        )
-========
         proc_output.assertWaitFor("Successful 'configure' of hardware 'kr6_r700_sixx'", timeout=15)
         proc_output.assertWaitFor("Successful 'activate' of hardware 'kr6_r700_sixx'", timeout=20)
->>>>>>>> upstream/master:kuka_kss_rsi_driver/test/test_driver_activation.py
