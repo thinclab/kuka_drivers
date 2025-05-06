@@ -1,3 +1,5 @@
+## For installation instructions of this fork, see the [kuka_irl_project](https://github.com/thinclab/kuka_irl_project/tree/jazzy?tab=readme-ov-file#3-clone-this-package-into-your-ros2-workspace) repository
+
 # ROS2 KUKA Drivers
 
 This repository contains ROS2 drivers for all KUKA operating systems.
