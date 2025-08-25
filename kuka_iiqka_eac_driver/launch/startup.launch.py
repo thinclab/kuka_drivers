@@ -24,7 +24,7 @@ from launch_ros.substitutions import FindPackageShare
 def launch_setup(context, *args, **kwargs):
     robot_model = LaunchConfiguration("robot_model")
     robot_urdf_folder = LaunchConfiguration("robot_urdf_folder")
-    robot_urdf_filepath = LaunchConfiguration("robot_urdf_filepath") 
+    robot_urdf_filepath = LaunchConfiguration("robot_urdf_filepath")
     controller_ip = LaunchConfiguration("controller_ip")
     client_ip = LaunchConfiguration("client_ip")
     mode = LaunchConfiguration("mode")

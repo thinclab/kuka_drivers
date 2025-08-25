@@ -80,14 +80,5 @@ class TestDriverActivation(unittest.TestCase):
             "Setting component 'lbr_iiwa14_r820' to 'unconfigured' state.", timeout=5
         )
         # Check for successful configuration and activation
-<<<<<<<< HEAD:kuka_sunrise_fri_driver/test/test_driver_activation.py
-        proc_output.assertWaitFor(
-            "Successful 'configure' of hardware 'lbr_iiwa14_r820'", timeout=15
-        )
-        proc_output.assertWaitFor(
-            "Successful 'activate' of hardware 'lbr_iiwa14_r820'", timeout=20
-        )
-========
         proc_output.assertWaitFor("Successful 'configure' of hardware 'kr6_r700_sixx'", timeout=15)
         proc_output.assertWaitFor("Successful 'activate' of hardware 'kr6_r700_sixx'", timeout=20)
->>>>>>>> upstream/master:kuka_kss_rsi_driver/test/test_driver_activation.py

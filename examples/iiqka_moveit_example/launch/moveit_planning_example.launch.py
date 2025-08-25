@@ -42,11 +42,6 @@ def launch_setup(context, *args, **kwargs):
     pitch = LaunchConfiguration("pitch")
     yaw = LaunchConfiguration("yaw")
 
-    if ns.perform(context) == "":
-        tf_prefix = ""
-    else:
-        tf_prefix = ns.perform(context) + "_"
-
     moveit_config = (
         MoveItConfigsBuilder("kuka_lbr_iisy")
         .robot_description(
@@ -69,7 +64,7 @@ def launch_setup(context, *args, **kwargs):
             publish_planning_scene=True,
             publish_geometry_updates=True,
             publish_state_updates=True,
-            publish_transforms_updates=True
+            publish_transforms_updates=True,
         )
         .joint_limits(
             file_path=get_package_share_directory("kuka_lbr_iisy_support")
@@ -93,19 +88,19 @@ def launch_setup(context, *args, **kwargs):
             [get_package_share_directory("kuka_iiqka_eac_driver"), "/launch/startup.launch.py"]
         ),
         launch_arguments={
-            'robot_model': robot_model,
-            'robot_urdf_folder': robot_urdf_folder,
-            'robot_urdf_filepath': robot_urdf_filepath,
-            'controller_ip': controller_ip,
-            'client_ip': client_ip,
-            'mode': mode,
-            'ns': ns,
-            'x': x,
-            'y': y,
-            'z': z,
-            'roll': roll,
-            'pitch': pitch,
-            'yaw': yaw,
+            "robot_model": robot_model,
+            "robot_urdf_folder": robot_urdf_folder,
+            "robot_urdf_filepath": robot_urdf_filepath,
+            "controller_ip": controller_ip,
+            "client_ip": client_ip,
+            "mode": mode,
+            "ns": ns,
+            "x": x,
+            "y": y,
+            "z": z,
+            "roll": roll,
+            "pitch": pitch,
+            "yaw": yaw,
         }.items(),
     )
 
@@ -135,11 +130,25 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description():
     launch_arguments = []
     launch_arguments.append(DeclareLaunchArgument("robot_model", default_value="lbr_iisy3_r760"))
-    launch_arguments.append(DeclareLaunchArgument("robot_urdf_folder", default_value="kuka_lbr_iisy_support"))
-    launch_arguments.append(DeclareLaunchArgument("robot_urdf_filepath", default_value=f"/urdf/lbr_iisy3_r760.urdf.xacro"))
-    launch_arguments.append(DeclareLaunchArgument("robot_srdf_folder", default_value="kuka_lbr_iisy_moveit_config"))
-    launch_arguments.append(DeclareLaunchArgument("robot_srdf_filepath", default_value=f"/urdf/lbr_iisy3_r760.srdf"))
-    launch_arguments.append(DeclareLaunchArgument("robot_kinematics_folder", default_value="kuka_lbr_iisy_moveit_config"))
+    launch_arguments.append(
+        DeclareLaunchArgument("robot_urdf_folder", default_value="kuka_lbr_iisy_support")
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "robot_urdf_filepath", default_value="/urdf/lbr_iisy3_r760.urdf.xacro"
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument("robot_srdf_folder", default_value="kuka_lbr_iisy_moveit_config")
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument("robot_srdf_filepath", default_value="/urdf/lbr_iisy3_r760.srdf")
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "robot_kinematics_folder", default_value="kuka_lbr_iisy_moveit_config"
+        )
+    )
     launch_arguments.append(DeclareLaunchArgument("controller_ip", default_value="192.168.1.244"))
     launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="192.168.1.151"))
     launch_arguments.append(DeclareLaunchArgument("mode", default_value="hardware"))
