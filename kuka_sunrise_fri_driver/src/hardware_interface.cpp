@@ -22,12 +22,12 @@
 namespace kuka_sunrise_fri_driver
 {
 CallbackReturn KukaFRIHardwareInterface::on_init(
-  const hardware_interface::HardwareInfo & system_info)
+  const hardware_interface::HardwareComponentInterfaceParams & params)
 {
   fri_connection_ =
     std::make_shared<FRIConnection>([this] { this->onError(); }, [this] { this->onError(); });
 
-  if (hardware_interface::SystemInterface::on_init(system_info) != CallbackReturn::SUCCESS)
+  if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
   {
     return CallbackReturn::ERROR;
   }
@@ -36,6 +36,7 @@ CallbackReturn KukaFRIHardwareInterface::on_init(
   client_port_ = std::stoi(info_.hardware_parameters.at("client_port"));
 
   hw_position_states_.resize(info_.joints.size());
+  hw_commanded_position_states_.resize(info_.joints.size());
   hw_position_commands_.resize(info_.joints.size());
   hw_stiffness_commands_.resize(info_.joints.size());
   hw_damping_commands_.resize(info_.joints.size());
@@ -107,10 +108,10 @@ CallbackReturn KukaFRIHardwareInterface::on_init(
       return CallbackReturn::ERROR;
     }
 
-    if (joint.state_interfaces.size() != 3)
+    if (joint.state_interfaces.size() != 4)
     {
       RCLCPP_FATAL(
-        rclcpp::get_logger("KukaFRIHardwareInterface"), "expecting exactly 3 state interface");
+        rclcpp::get_logger("KukaFRIHardwareInterface"), "expecting exactly 4 state interface");
       return CallbackReturn::ERROR;
     }
 
@@ -135,6 +136,13 @@ CallbackReturn KukaFRIHardwareInterface::on_init(
       RCLCPP_FATAL(
         rclcpp::get_logger("KukaFRIHardwareInterface"),
         "expecting 'EXTERNAL_TORQUE' state interface as third");
+      return CallbackReturn::ERROR;
+    }
+    if (joint.state_interfaces[3].name != hardware_interface::HW_IF_COMMANDED_POSITION)
+    {
+      RCLCPP_FATAL(
+        rclcpp::get_logger("KukaFRIHardwareInterface"),
+        "expecting 'COMMANDED_POSITION' state interface as fourth");
       return CallbackReturn::ERROR;
     }
   }
@@ -186,6 +194,19 @@ CallbackReturn KukaFRIHardwareInterface::on_cleanup(const rclcpp_lifecycle::Stat
 
 CallbackReturn KukaFRIHardwareInterface::on_activate(const rclcpp_lifecycle::State &)
 {
+  // FRI config cannot be set during hardware interface configuration, as the controller cannot
+  // modify the cmd interface until the hardware reached the configured state
+  // write() is no longer called in inactive state, so we can only set config during activation
+
+  if (!fri_connection_->setFRIConfig(
+        client_ip_, client_port_, static_cast<int>(send_period_ms_),
+        static_cast<int>(receive_multiplier_)))
+  {
+    RCLCPP_ERROR(rclcpp::get_logger("KukaFRIHardwareInterface"), "Could not set FRI config");
+    return CallbackReturn::ERROR;
+  }
+  RCLCPP_INFO(rclcpp::get_logger("KukaFRIHardwareInterface"), "Successfully set FRI config");
+
   // Set control mode before starting motion - not even the impedance attributes can be changed in
   // active state
   switch (static_cast<kuka_drivers_core::ControlMode>(control_mode_))
@@ -316,6 +337,10 @@ hardware_interface::return_type KukaFRIHardwareInterface::read(
     hw_ext_torque_states_.assign(
       external_torque, external_torque + KUKA::FRI::LBRState::NUMBER_OF_JOINTS);
 
+    std::copy(
+      hw_position_commands_.begin(), hw_position_commands_.end(),
+      hw_commanded_position_states_.begin());
+
     robot_state_.tracking_performance_ = robotState().getTrackingPerformance();
     robot_state_.session_state_ = robotState().getSessionState();
     robot_state_.connection_quality_ = robotState().getConnectionQuality();
@@ -341,29 +366,10 @@ hardware_interface::return_type KukaFRIHardwareInterface::read(
 hardware_interface::return_type KukaFRIHardwareInterface::write(
   const rclcpp::Time &, const rclcpp::Duration &)
 {
-  // Client app update and read must be called only if read has been called in current cycle
-  // FRI configuration can be modified only before cyclic communication is started
+  // Make sure to only call client app calls if read has been called before
+  // write() is no longer called before HWIF is activated, so it is not necessary to check for
+  // control started
   if (!active_read_)
-  {
-    if (FRIConfigChanged())
-    {
-      // FRI config cannot be set during hardware interface configuration, as the controller cannot
-      // modify the cmd interface until the hardware reached the configured state
-      if (!fri_connection_->setFRIConfig(
-            client_ip_, client_port_, static_cast<int>(send_period_ms_),
-            static_cast<int>(receive_multiplier_)))
-      {
-        RCLCPP_ERROR(rclcpp::get_logger("KukaFRIHardwareInterface"), "Could not set FRI config");
-        return hardware_interface::return_type::ERROR;
-      }
-      RCLCPP_INFO(rclcpp::get_logger("KukaFRIHardwareInterface"), "Successfully set FRI config");
-    }
-
-    return hardware_interface::return_type::OK;
-  }
-
-  // Make sure to only call client app calls if not called from elsewhere
-  if (!fri_started_ || !control_activated_)
   {
     return hardware_interface::return_type::OK;
   }
@@ -467,6 +473,10 @@ std::vector<hardware_interface::StateInterface> KukaFRIHardwareInterface::export
 
     state_interfaces.emplace_back(
       info_.joints[i].name, hardware_interface::HW_IF_EXTERNAL_TORQUE, &hw_ext_torque_states_[i]);
+
+    state_interfaces.emplace_back(
+      info_.joints[i].name, hardware_interface::HW_IF_COMMANDED_POSITION,
+      &hw_commanded_position_states_[i]);
   }
 
   state_interfaces.emplace_back(
@@ -530,23 +540,6 @@ void KukaFRIHardwareInterface::onError()
   last_event_ = kuka_drivers_core::HardwareEvent::ERROR;
   RCLCPP_ERROR(
     rclcpp::get_logger("KukaFRIHardwareInterface"), "External control stopped by an error");
-}
-
-bool KukaFRIHardwareInterface::FRIConfigChanged()
-{
-  // FRI config values are integers and only stored as doubles due to hwif constraints
-  if (
-    prev_period_ == static_cast<int>(send_period_ms_) &&
-    prev_multiplier_ == static_cast<int>(receive_multiplier_))
-  {
-    return false;
-  }
-  else
-  {
-    prev_period_ = static_cast<int>(send_period_ms_);
-    prev_multiplier_ = static_cast<int>(receive_multiplier_);
-    return true;
-  }
 }
 }  // namespace kuka_sunrise_fri_driver
 

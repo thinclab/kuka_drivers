@@ -22,6 +22,8 @@ Example cli command to set damping to 0.7 and stiffness to 100 for all joints of
 ros2 topic pub /joint_group_impedance_controller/commands std_msgs/msg/Float64MultiArray "{data: [100, 0.7, 100, 0.7, 100, 0.7, 100, 0.7, 100, 0.7, 100, 0.7]}" --once
 ```
 
+The controller also publishes the position values commanded at the joint position interface to the `~/commanded_positions` topic, which can be used instead of the measured joint positions to allow seamless execution of consequent trajectories in joint impedance mode.
+
 __Required Parameters__:
 
 - `joints` [string_array]: Names of joints used by the controller
@@ -61,7 +63,7 @@ __Required Parameters__: None
 
 ### 3.2. `fri_configuration_controller`
 
-The `SendPeriodMilliSec` parameter of FRI defines the period with which the controller sends state updates, while the `ReceiveMultiplier` defines the answer rate factor (ratio of receiving states and sending commands). These are parameters of the hardware interface, which can be modified in connected state, when control is not active. To support changing these parameters after startup, the `FRIConfigurationController` advertises the topic `~/set_fri_config`. Sending a message containing the desired integer values of `send_period_ms` and `receive_multiplier` updates the parameters of the hardware interface.
+The `SendPeriodMilliSec` parameter of FRI defines the period with which the controller sends state updates, while the `ReceiveMultiplier` defines the answer rate factor (ratio of receiving states and sending commands). These are parameters of the hardware interface, which can be modified in connected state, when control is not active. To support changing these parameters after startup, the `FRIConfigurationController` advertises the topic `~/set_fri_config`. Sending a message containing the desired integer values of `cycle_time` and `receive_multiplier` updates the parameters of the hardware interface.
 
 __Required Parameters__: None
 

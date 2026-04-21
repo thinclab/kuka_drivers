@@ -2,6 +2,15 @@
 
 ## Setup
 
+### Test setup
+
+Tested configurations:
+
+| Controller | Robot              | iiQKA.OS2 Version | RSI Version |
+|------------|--------------------|-------------------|-------------|
+| KR C5 OPS  | &ndash;            | 9.1.0             | 6.1.2       |
+| KR C5      | KR 16 R1610-2      | 9.1.0             | 6.1.2       |
+
 ### Client side
 
 It is recommended to run the driver on a real-time capable client machine. Detailed instructions for setting up the `PREEMPT_RT` path are available on the [Realtime](https://github.com/kroshu/kuka_drivers/wiki/6_Realtime) wiki page.
@@ -92,6 +101,7 @@ The following parameters must be set in the driver configuration file:
 The parameters in the driver configuration file can be also changed during runtime using the parameter interface of the `robot_manager` node:
 
 - `position_controller_name`: The name of the controller (string) that controls the `position` interface of the robot. It can't be changed in active state.
+- `cycle_time`: The cycle time of RSI communication either 1 (4ms) or 2 (12ms). It can't be changed in active state.
 
 ### IP Configuration
 
@@ -177,6 +187,65 @@ To configure the client side, two configuration files need to be completed:
      - These must be listed in groups, as explained in the linked controller documentation.
      - Ensure that the interface names match those defined earlier.
 
+### External axes configuration
+
+Both iiQKA.OS2 and the RSI option package support adding external axes to the robot. We provide an [example](https://github.com/kroshu/examples/blob/master/kuka_external_axis_examples) that integrates a single linear axis. This example, together with the structure and documentation, should help users implement their own external‑axis configurations.
+
+#### Controller-side configuration
+
+Use the files in [`kuka_external_control_sdk/krc_setup/iiqka_os2`](https://github.com/kroshu/kuka-external-control-sdk/tree/master/kuka_external_control_sdk/krc_setup/iiqka_os2) when configuring the controller side.
+
+##### Context
+
+The `RobotSensorInterface/Context/rsi_ext_axis_example.rsix` contains an example setup with one linear external axis:
+
+![External Axis Example Context](resources/rsi_ext_axis_example_context.png)
+
+Compared to the original context:
+
+![Original Context](resources/rsi_joint_pos_context.png)
+
+The following changes were required:
+
+- Add the `AxisCorrExt` object.
+- Connect `Ethernet` object's `Out8` output to the first input of `AxisCorrExt`.
+- Update the `LowerLimE1` and `UpperLimE1` parameters of `AxisCorrExt`.
+- Update the `MaxE1` parameter of the `AxisCorrMon` object.
+
+To create a new custom context:
+
+- Connect the next `OutX` output of the `Ethernet` object to the corresponding `CorrEX` input of `AxisCorrExt` for each external axis.
+- Adjust limits (`MaxEX`, `LowerLimX`, `UpperLimX`) accordingly.
+
+##### Ethernet configuration
+
+The configuration file referenced by the Ethernet object must also be updated. See the example in: `RobotSensorInterface/Ethernet configuration/rsi_ext_axis_ethernet.xml`.
+
+The only difference from the original configuration is an additional line in the `RECEIVE` block:
+
+```xml
+<ELEMENT TAG="EK.E1" TYPE="DOUBLE" INDX="8" HOLDON="1" />
+```
+
+This allows RSI to parse data from the driver.
+
+> [!IMPORTANT]
+> Use a consistent naming convention for external-axis values (`TAG="EK.EX"`), incrementing `X` for each axis. Ensure `INDX` values also increase sequentially.
+
+> [!IMPORTANT]
+> When using GPIOs, list external axes before adding GPIO message configuration. The correct order is: internal axes &rarr; external axes &rarr; GPIOs.
+
+##### Program
+
+To adapt the KRL program for the external-axis example, update the `CONTEXT_NAME` variable in `Program/RSI/rsi_joint_pos.dat` to `rsi_ext_axis_example`. For custom setups, use the name of the corresponding context file.
+
+#### Client-side configuration
+
+See the [kuka_robot_descriptions README](https://github.com/kroshu/kuka_robot_descriptions/blob/master/README.md#external-axes-configuration) for all client-side configuration steps.
+
+> [!NOTE]
+> The driver supports only __revolute__ and __prismatic__ external joints.
+
 ## Usage
 
 ### Starting the driver
@@ -204,13 +273,14 @@ To configure the client side, two configuration files need to be completed:
 3. In the **Programming** menu, under the **Navigator** tab start the `Program\ros_rsi.src` program on the controller and execute the line of `RSI_MOVECORR()`
    - in T1, a warning (*!!! Attention - Sensor correction goes active !!!*) should be visible after reaching `RSI_MOVECORR()`, which should be confirmed to start this step
 
-On successful activation the brakes of the robot will be released and external control is started. To test moving the robot, the `rqt_joint_trajectory_controller` is not recommended, use the launch file in the `iiqka_moveit_example` package instead (usage is described in the [Additional packages](https://github.com/kroshu/kuka_drivers/wiki#additional-packages) section of the project overview).
+On successful activation the brakes of the robot will be released and external control is started. To test moving the robot, the `rqt_joint_trajectory_controller` is not recommended, use the launch file in the `iiqka_moveit_example` package instead (usage is described in the [Additional packages](https://github.com/kroshu/kuka_drivers/wiki#moveit-integration) section of the project overview).
 
 #### Launch arguments
 
 Both launch files support the following arguments:
 
 - `client_port`: port of the client machine (default: 59152)
+- `mxa_client_port`: port of the client machine where mxAutomation packets are received (default: 1337)
 - `robot_model` and `robot_family`: defines which robot to use. The available options for the valid model and family combinations can be found in the [readme](https://github.com/kroshu/kuka_robot_descriptions?tab=readme-ov-file#what-is-verified) of the `kuka_robot_descriptions` repository.
 - `mode`: if set to 'mock', the `KukaMockHardwareInterface` will be used instead of the `KukaRSIHardwareInterface`. This enables trying out the driver without actual hardware.
 - `use_gpio`: if set to `false` the usage of I/Os are disabled (defaults to `true`).
@@ -220,6 +290,10 @@ Both launch files support the following arguments:
 - `roundtrip_time`: The roundtrip time (in microseconds) to be enforced by the [KUKA mock hardware interface](https://github.com/kroshu/kuka_robot_descriptions?tab=readme-ov-file#custom-mock-hardware), (defaults to 2500 us, only used if `mode` is set to 'mock')
 - `controller_config`: the location of the `ros2_control` configuration file (defaults to `kuka_rsi_driver/config/ros2_controller_config.yaml`)
 - `jtc_config`: the location of the configuration file for the `joint_trajectory_controller` (defaults to `kuka_rsi_driver/config/joint_trajectory_controller_config.yaml`).
+- `rt_core`: CPU core index for taskset pinning of the realtime control thread. (default: -1 = do not pin)
+- `rt_prio`: The realtime priority of the thread that runs the control loop [0-99] (default: 70)
+- `non_rt_cores`: Comma-separated CPU core indices for taskset pinning of non-RT threads (e.g. '2,3,4'). Leave empty to disable pinning. (defaults to empty string)
+- `lock_memory`: Whether to lock memory of the control loop with mlockall to avoid paging (defaults to true)
 
 The `startup_with_rviz.launch.py` additionally contains one argument:
 
@@ -242,7 +316,7 @@ ros2 launch kuka_rsi_driver startup_with_rviz.launch.py
 ```
 
 ```bash
-ros2 launch kuka_rsi_simulator kuka_rsi_simulator_launch.py
+ros2 launch kuka_rsi_simulator kuka_rsi_simulator.launch.py
 ```
 
 After all components have started successfully, the system needs to be configured and activated to start the simulation. The robot will be visible in rviz after activation:
@@ -255,4 +329,4 @@ ros2 lifecycle set robot_manager activate
 ## Known issues and limitations
 
 - In case of an error on the controller side, the driver is not deactivated
-- Cartesian position control mode and I/O-s not yet supported
+- Cartesian position control mode not yet supported

@@ -1,4 +1,4 @@
-// Copyright 2022 Aron Svastits
+// Copyright 2022 KUKA Hungaria Kft.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,9 +27,10 @@
 
 namespace kuka_eac
 {
-CallbackReturn KukaEACHardwareInterface::on_init(const hardware_interface::HardwareInfo & info)
+CallbackReturn KukaEACHardwareInterface::on_init(
+  const hardware_interface::HardwareComponentInterfaceParams & params)
 {
-  if (hardware_interface::SystemInterface::on_init(info) != CallbackReturn::SUCCESS)
+  if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
   {
     return CallbackReturn::ERROR;
   }
@@ -37,6 +38,7 @@ CallbackReturn KukaEACHardwareInterface::on_init(const hardware_interface::Hardw
   // Initialize control mode with 'undefined', which should be changed by the appropriate controller
   // during configuration
   hw_position_states_.resize(info_.joints.size(), 0.0);
+  hw_commanded_position_states_.resize(info_.joints.size(), 0.0);
   hw_torque_states_.resize(info_.joints.size(), 0.0);
   hw_position_commands_.resize(info_.joints.size(), 0.0);
   hw_torque_commands_.resize(info_.joints.size(), 0.0);
@@ -84,10 +86,10 @@ CallbackReturn KukaEACHardwareInterface::on_init(const hardware_interface::Hardw
       return CallbackReturn::ERROR;
     }
 
-    if (joint.state_interfaces.size() != 2)
+    if (joint.state_interfaces.size() != 3)
     {
       RCLCPP_FATAL(
-        rclcpp::get_logger("KukaEACHardwareInterface"), "expecting exactly 2 state interface");
+        rclcpp::get_logger("KukaEACHardwareInterface"), "expecting exactly 3 state interface");
       return CallbackReturn::ERROR;
     }
 
@@ -104,6 +106,14 @@ CallbackReturn KukaEACHardwareInterface::on_init(const hardware_interface::Hardw
       RCLCPP_FATAL(
         rclcpp::get_logger("KukaEACHardwareInterface"),
         "expecting 'EFFORT' state interface as second");
+      return CallbackReturn::ERROR;
+    }
+
+    if (joint.state_interfaces[2].name != hardware_interface::HW_IF_COMMANDED_POSITION)
+    {
+      RCLCPP_FATAL(
+        rclcpp::get_logger("KukaEACHardwareInterface"),
+        "expecting 'COMMANDED_POSITION' state interface as third");
       return CallbackReturn::ERROR;
     }
   }
@@ -128,6 +138,10 @@ std::vector<hardware_interface::StateInterface> KukaEACHardwareInterface::export
 
     state_interfaces.emplace_back(
       info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &hw_torque_states_[i]);
+
+    state_interfaces.emplace_back(
+      info_.joints[i].name, hardware_interface::HW_IF_COMMANDED_POSITION,
+      &hw_commanded_position_states_[i]);
   }
 
   state_interfaces.emplace_back(
@@ -212,16 +226,19 @@ CallbackReturn KukaEACHardwareInterface::on_activate(const rclcpp_lifecycle::Sta
     rclcpp::get_logger("KukaEACHardwareInterface"),
     "External control session started successfully");
 
-  stop_requested_ = false;
   cycle_count_ = 0;
   return CallbackReturn::SUCCESS;
 }
 
 CallbackReturn KukaEACHardwareInterface::on_deactivate(const rclcpp_lifecycle::State &)
 {
-  RCLCPP_INFO(rclcpp::get_logger("KukaEACHardwareInterface"), "Deactivating hardware interface");
+  RCLCPP_INFO(
+    rclcpp::get_logger("KukaEACHardwareInterface"),
+    "Deactivating hardware interface by sending stop signal");
 
-  stop_requested_ = true;
+  // StopControlling sometimes calls a blocking read, which could conflict with the read() method,
+  // but resource manager handles locking (resources_lock_), so is not necessary here
+  robot_ptr_->StopControlling();
 
   return CallbackReturn::SUCCESS;
 }
@@ -249,6 +266,10 @@ return_type KukaEACHardwareInterface::read(const rclcpp::Time &, const rclcpp::D
         hw_position_states_.begin(), hw_position_states_.end(), hw_position_commands_.begin());
     }
 
+    std::copy(
+      hw_position_commands_.begin(), hw_position_commands_.end(),
+      hw_commanded_position_states_.begin());
+
     cycle_count_++;
   }
 
@@ -275,13 +296,7 @@ return_type KukaEACHardwareInterface::write(const rclcpp::Time &, const rclcpp::
     hw_damping_commands_.end());
 
   kuka::external::control::Status send_reply;
-  if (stop_requested_)
-  {
-    RCLCPP_INFO(rclcpp::get_logger("KukaEACHardwareInterface"), "Sending stop signal");
-    send_reply = robot_ptr_->StopControlling();
-  }
-  else if (
-    static_cast<kuka_drivers_core::ControlMode>(hw_control_mode_command_) != prev_control_mode_)
+  if (static_cast<kuka_drivers_core::ControlMode>(hw_control_mode_command_) != prev_control_mode_)
   {
     RCLCPP_INFO(rclcpp::get_logger("KukaEACHardwareInterface"), "Requesting control mode switch");
     send_reply = robot_ptr_->SwitchControlMode(

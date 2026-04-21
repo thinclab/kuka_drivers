@@ -1,4 +1,4 @@
-// Copyright 2023 Aron Svastits
+// Copyright 2023 KUKA Hungaria Kft.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ static constexpr char HW_IF_STIFFNESS[] = "stiffness";
 static constexpr char HW_IF_DAMPING[] = "damping";
 // Constant defining external torque interface
 static constexpr char HW_IF_EXTERNAL_TORQUE[] = "external_torque";
+// Constant defining commanded joint position interface
+static constexpr char HW_IF_COMMANDED_POSITION[] = "commanded_position";
 
 /* Interface prefixes */
 // Constant defining prefix for I/O interfaces

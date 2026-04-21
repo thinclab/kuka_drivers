@@ -1,4 +1,4 @@
-// Copyright 2022 Aron Svastits
+// Copyright 2022 KUKA Hungaria Kft.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 #ifndef KUKA_CONTROL_MODE_HANDLER__KUKA_CONTROL_MODE_HANDLER_HPP_
 #define KUKA_CONTROL_MODE_HANDLER__KUKA_CONTROL_MODE_HANDLER_HPP_
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -55,7 +56,7 @@ public:
 
 private:
   rclcpp::Subscription<std_msgs::msg::UInt32>::SharedPtr control_mode_subscriber_;
-  kuka_drivers_core::ControlMode control_mode_ =
+  std::atomic<kuka_drivers_core::ControlMode> control_mode_ =
     kuka_drivers_core::ControlMode::CONTROL_MODE_UNSPECIFIED;
 };
 }  // namespace kuka_controllers

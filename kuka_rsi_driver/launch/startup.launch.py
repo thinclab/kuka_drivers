@@ -1,4 +1,4 @@
-# Copyright 2023 Aron Svastits
+# Copyright 2023 KUKA Hungaria Kft.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ def launch_setup(context, *args, **kwargs):
     driver_version = LaunchConfiguration("driver_version")
     client_ip = LaunchConfiguration("client_ip")
     client_port = LaunchConfiguration("client_port")
+    mxa_client_port = LaunchConfiguration("mxa_client_port")
     controller_ip = LaunchConfiguration("controller_ip")
     x = LaunchConfiguration("x")
     y = LaunchConfiguration("y")
@@ -47,16 +48,41 @@ def launch_setup(context, *args, **kwargs):
     controller_config = LaunchConfiguration("controller_config")
     jtc_config = LaunchConfiguration("jtc_config")
     gpio_config = LaunchConfiguration("gpio_config")
+    non_rt_cores = LaunchConfiguration("non_rt_cores")
+    rt_core = LaunchConfiguration("rt_core")
+    rt_prio = LaunchConfiguration("rt_prio")
+    lock_memory = LaunchConfiguration("lock_memory")
     if ns.perform(context) == "":
         tf_prefix = ""
     else:
         tf_prefix = ns.perform(context) + "_"
 
+    # Parse allowed cores into a list of integers; allow formats like "2,3, 4" or "  "
+    cores = []
+    for part in non_rt_cores.perform(context).split(","):
+        part = part.strip()
+        if part == "":
+            continue
+        try:
+            cores.append(int(part))
+        except ValueError:
+            raise RuntimeError(
+                f"Invalid allowed_cores entry: '{part}'. "
+                "Provide a comma-separated list of integers, e.g. '2,3,4'."
+            )
+
+    # Compute the prefix: None if no cores; otherwise build 'taskset -c <list>'
+    prefix_cmd = None
+    if cores:
+        # Build the string "2,3,4" for taskset
+        core_list_str = ",".join(str(c) for c in cores)
+        prefix_cmd = f"taskset -c {core_list_str}"
+
     if not controller_config.perform(context):
         rel_path_to_config_file = (
             "/config/ros2_controller_config_rsi_only.yaml"
             if driver_version.perform(context) == "rsi_only"
-            else "/config/ros2_controller_config_eki_rsi.yaml"
+            else "/config/ros2_controller_config_extended.yaml"
         )
         controller_config = (
             get_package_share_directory("kuka_rsi_driver") + rel_path_to_config_file
@@ -86,6 +112,9 @@ def launch_setup(context, *args, **kwargs):
             " ",
             "client_port:=",
             client_port,
+            " ",
+            "mxa_client_port:=",
+            mxa_client_port,
             " ",
             "client_ip:=",
             client_ip,
@@ -128,8 +157,6 @@ def launch_setup(context, *args, **kwargs):
     # The driver config contains only parameters that can be changed after startup
     driver_config = get_package_share_directory("kuka_rsi_driver") + "/config/driver_config.yaml"
 
-    controller_manager_node = ns.perform(context) + "/controller_manager"
-
     control_node = Node(
         namespace=ns,
         package="kuka_drivers_core",
@@ -138,11 +165,15 @@ def launch_setup(context, *args, **kwargs):
             robot_description,
             controller_config,
             {
+                "cpu_affinity": int(rt_core.perform(context)),
+                "thread_priority": int(rt_prio.perform(context)),
+                "lock_memory": lock_memory.perform(context) == "true",
                 "hardware_components_initial_state": {
                     "unconfigured": [tf_prefix + robot_model.perform(context)]
                 },
             },
         ],
+        prefix=prefix_cmd,
     )
     robot_manager_node = LifecycleNode(
         name=["robot_manager"],
@@ -151,9 +182,10 @@ def launch_setup(context, *args, **kwargs):
         executable=(
             "robot_manager_node_rsi_only"
             if driver_version.perform(context) == "rsi_only"
-            else "robot_manager_node_eki_rsi"
+            else "robot_manager_node_extended"
         ),
         parameters=[driver_config, {"robot_model": robot_model, "use_gpio": use_gpio}],
+        prefix=prefix_cmd,
     )
     robot_state_publisher = Node(
         namespace=ns,
@@ -161,14 +193,15 @@ def launch_setup(context, *args, **kwargs):
         executable="robot_state_publisher",
         output="both",
         parameters=[robot_description],
+        prefix=prefix_cmd,
     )
 
     # Spawn controllers
-    def controller_spawner(controller_name, param_file=None, activate=False):
+    def controller_spawner(controller_name, prefix_cmd, param_file=None, activate=False):
         arg_list = [
             controller_name,
             "-c",
-            controller_manager_node,
+            "controller_manager",
             "-n",
             ns,
         ]
@@ -180,20 +213,29 @@ def launch_setup(context, *args, **kwargs):
         if not activate:
             arg_list.append("--inactive")
 
-        return Node(package="controller_manager", executable="spawner", arguments=arg_list)
+        return Node(
+            package="controller_manager",
+            executable="spawner",
+            prefix=prefix_cmd,
+            arguments=arg_list,
+        )
 
-    controllers = {"joint_state_broadcaster": None, "joint_trajectory_controller": jtc_config}
+    controllers = {
+        "joint_state_broadcaster": None,
+        "joint_trajectory_controller": jtc_config,
+        "event_broadcaster": None,
+    }
 
     if use_gpio.perform(context) == "true":
         controllers["gpio_controller"] = gpio_config
 
-    if driver_version.perform(context) == "eki_rsi":
+    if driver_version.perform(context) in {"eki_rsi", "mxa_rsi"}:
         controllers["control_mode_handler"] = None
-        controllers["event_broadcaster"] = None
         controllers["kss_message_handler"] = None
 
     controller_spawners = [
-        controller_spawner(name, param_file) for name, param_file in controllers.items()
+        controller_spawner(name, prefix_cmd, param_file)
+        for name, param_file in controllers.items()
     ]
 
     nodes_to_start = [
@@ -211,19 +253,20 @@ def generate_launch_description():
     launch_arguments.append(DeclareLaunchArgument("robot_family", default_value="agilus"))
     launch_arguments.append(DeclareLaunchArgument("mode", default_value="hardware"))
     launch_arguments.append(
-        DeclareLaunchArgument("use_gpio", default_value="true", choices=["true", "false"])
+        DeclareLaunchArgument("use_gpio", default_value="false", choices=["true", "false"])
     )
     launch_arguments.append(
         DeclareLaunchArgument(
             "driver_version",
             default_value="rsi_only",
             description="Select the driver version to use",
-            choices=["rsi_only", "eki_rsi"],
+            choices=["rsi_only", "eki_rsi", "mxa_rsi"],
         )
     )
     launch_arguments.append(DeclareLaunchArgument("namespace", default_value=""))
     launch_arguments.append(DeclareLaunchArgument("client_ip", default_value="0.0.0.0"))
     launch_arguments.append(DeclareLaunchArgument("client_port", default_value="59152"))
+    launch_arguments.append(DeclareLaunchArgument("mxa_client_port", default_value="1337"))
     launch_arguments.append(DeclareLaunchArgument("controller_ip", default_value="0.0.0.0"))
     launch_arguments.append(DeclareLaunchArgument("x", default_value="0"))
     launch_arguments.append(DeclareLaunchArgument("y", default_value="0"))
@@ -250,6 +293,39 @@ def generate_launch_description():
             "gpio_config",
             default_value=get_package_share_directory("kuka_rsi_driver")
             + "/config/gpio_controller_config.yaml",
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "rt_core",
+            default_value="-1",  # -1 means do not pin to core
+            description=("CPU core index for taskset pinning of the RT thread"),
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "rt_prio",
+            default_value="70",
+            description=("The priority of the thread that runs the control loop"),
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "non_rt_cores",
+            default_value="",
+            description=(
+                "Comma-separated CPU core indices for taskset pinning of non-RT threads "
+                "(e.g. '2,3,4'). Leave empty to disable pinning."
+            ),
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "lock_memory",
+            default_value="true",
+            description=(
+                "Whether to lock memory of the control loop with mlockall to avoid paging"
+            ),
         )
     )
 

@@ -2,6 +2,14 @@
 
 ## Setup
 
+### Test setup
+
+Tested configurations:
+
+| Controller | Robot           | iiQKA.OS1 Version | EAC Version |
+|------------|-----------------|-------------------|-------------|
+| KR C5      | LBR iisy 3 R760 | 1.2.14            | 1.0.3       |
+
 ### Client side
 
 - It is recommended to use the driver on a real-time capable client machine (further information about setting up the PREEMPT_RT patch can be found [here](https://github.com/kroshu/kuka_drivers/wiki/6_Realtime)).
@@ -71,7 +79,7 @@ After successful startup, the `robot_manager` node has to be activated to start 
   ros2 lifecycle set robot_manager activate
   ```
 
-On successful activation the brakes of the robot will be released and external control is started using the requested control mode. To test moving the robot, the `rqt_joint_trajectory_controller` is not recommended, use the launch file in the `iiqka_moveit_example` package instead (usage is described in the [Additional packages](https://github.com/kroshu/kuka_drivers/wiki#additional-packages) section of the project overview).
+On successful activation the brakes of the robot will be released and external control is started using the requested control mode. To test moving the robot, the `rqt_joint_trajectory_controller` is not recommended, use the launch file in the `iiqka_moveit_example` package instead (usage is described in the [Additional packages](https://github.com/kroshu/kuka_drivers/wiki#moveit-integration) section of the project overview).
 
 It is important to note, that the commanded and measures torques have a different meaning: the `effort` command interface accepts values that should be superimposed on internal gravity compensation, while the state interface provides the actually measured torques (sum on internal and external effects).
 
@@ -92,6 +100,10 @@ Both launch files support the following arguments:
 - `jtc_config`: the location of the configuration file for the `joint_trajectory_controller` (defaults to `kuka_iiqka_eac_driver/config/joint_trajectory_controller_config.yaml`)
 - `jic_config`: the location of the configuration file for the `joint_impedance_controller` (defaults to `kuka_iiqka_eac_driver/config/joint_impedance_controller_config.yaml`)
 - `ec_config`: the location of the configuration file for the `effort_controller` (defaults to `kuka_iiqka_eac_driver/config/effort_controller_config.yaml`)
+- `rt_core`: CPU core index for taskset pinning of the realtime control thread. (default: -1 = do not pin)
+- `rt_prio`: The realtime priority of the thread that runs the control loop [0-99] (default: 70)
+- `non_rt_cores`: Comma-separated CPU core indices for taskset pinning of non-RT threads (e.g. '2,3,4'). Leave empty to disable pinning. (defaults to empty string)
+- `lock_memory`: Whether to lock memory of the control loop with mlockall to avoid paging (defaults to true)
 
 The `startup_with_rviz.launch.py` additionally contains one argument:
 

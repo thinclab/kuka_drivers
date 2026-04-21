@@ -1,4 +1,4 @@
-# Copyright 2022 Aron Svastits
+# Copyright 2022 KUKA Hungaria Kft.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,10 +40,35 @@ def launch_setup(context, *args, **kwargs):
     jic_config = LaunchConfiguration("jic_config")
     ec_config = LaunchConfiguration("ec_config")
     etb_config = LaunchConfiguration("etb_config")
+    non_rt_cores = LaunchConfiguration("non_rt_cores")
+    rt_core = LaunchConfiguration("rt_core")
+    rt_prio = LaunchConfiguration("rt_prio")
+    lock_memory = LaunchConfiguration("lock_memory")
     if ns.perform(context) == "":
         tf_prefix = ""
     else:
         tf_prefix = ns.perform(context) + "_"
+
+    # Parse allowed cores into a list of integers; allow formats like "2,3, 4" or " "
+    cores = []
+    for part in non_rt_cores.perform(context).split(","):
+        part = part.strip()
+        if part == "":
+            continue
+        try:
+            cores.append(int(part))
+        except ValueError:
+            raise RuntimeError(
+                f"Invalid allowed_cores entry: '{part}'. "
+                "Provide a comma-separated list of integers, e.g. '2,3,4'."
+            )
+
+    # Compute the prefix: None if no cores; otherwise build 'taskset -c <list>'
+    prefix_cmd = None
+    if cores:
+        # Build the string "2,3,4" for taskset
+        core_list_str = ",".join(str(c) for c in cores)
+        prefix_cmd = f"taskset -c {core_list_str}"
 
     # Get URDF via xacro
     robot_description_content = Command(
@@ -105,8 +130,6 @@ def launch_setup(context, *args, **kwargs):
         get_package_share_directory("kuka_sunrise_fri_driver") + "/config/driver_config.yaml"
     )
 
-    controller_manager_node = ns.perform(context) + "/controller_manager"
-
     control_node = Node(
         namespace=ns,
         package="kuka_drivers_core",
@@ -115,11 +138,15 @@ def launch_setup(context, *args, **kwargs):
             robot_description,
             controller_config,
             {
+                "cpu_affinity": int(rt_core.perform(context)),
+                "thread_priority": int(rt_prio.perform(context)),
+                "lock_memory": lock_memory.perform(context) == "true",
                 "hardware_components_initial_state": {
                     "unconfigured": [tf_prefix + robot_model.perform(context)]
                 },
             },
         ],
+        prefix=prefix_cmd,
     )
     robot_manager_node = LifecycleNode(
         name=["robot_manager"],
@@ -133,6 +160,7 @@ def launch_setup(context, *args, **kwargs):
                 "controller_ip": controller_ip,
             },
         ],
+        prefix=prefix_cmd,
     )
     robot_state_publisher = Node(
         namespace=ns,
@@ -140,14 +168,15 @@ def launch_setup(context, *args, **kwargs):
         executable="robot_state_publisher",
         output="both",
         parameters=[robot_description],
+        prefix=prefix_cmd,
     )
 
     # Spawn controllers
-    def controller_spawner(controller_name, param_file=None, activate=False):
+    def controller_spawner(controller_name, prefix_cmd, param_file=None, activate=False):
         arg_list = [
             controller_name,
             "-c",
-            controller_manager_node,
+            "controller_manager",
             "-n",
             ns,
         ]
@@ -159,7 +188,12 @@ def launch_setup(context, *args, **kwargs):
         if not activate:
             arg_list.append("--inactive")
 
-        return Node(package="controller_manager", executable="spawner", arguments=arg_list)
+        return Node(
+            package="controller_manager",
+            executable="spawner",
+            prefix=prefix_cmd,
+            arguments=arg_list,
+        )
 
     controllers = {
         "joint_state_broadcaster": None,
@@ -174,7 +208,8 @@ def launch_setup(context, *args, **kwargs):
     }
 
     controller_spawners = [
-        controller_spawner(name, param_file) for name, param_file in controllers.items()
+        controller_spawner(name, prefix_cmd, param_file)
+        for name, param_file in controllers.items()
     ]
 
     nodes_to_start = [
@@ -234,6 +269,39 @@ def generate_launch_description():
             "etb_config",
             default_value=get_package_share_directory("kuka_sunrise_fri_driver")
             + "/config/external_torque_broadcaster_config.yaml",
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "rt_core",
+            default_value="-1",  # -1 means do not pin to core
+            description=("CPU core index for taskset pinning of the RT thread"),
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "rt_prio",
+            default_value="70",
+            description=("The priority of the thread that runs the control loop"),
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "non_rt_cores",
+            default_value="",
+            description=(
+                "Comma-separated CPU core indices for taskset pinning of non-RT threads "
+                "(e.g. '2,3,4'). Leave empty to disable pinning."
+            ),
+        )
+    )
+    launch_arguments.append(
+        DeclareLaunchArgument(
+            "lock_memory",
+            default_value="true",
+            description=(
+                "Whether to lock memory of the control loop with mlockall to avoid paging"
+            ),
         )
     )
     return LaunchDescription(launch_arguments + [OpaqueFunction(function=launch_setup)])

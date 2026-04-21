@@ -72,6 +72,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr joint_imp_pub_;
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr event_subscriber_;
   std_msgs::msg::UInt32 control_mode_msg_;
+  rclcpp::Client<rcl_interfaces::srv::SetParameters>::SharedPtr set_param_client_;
 
   int receive_multiplier_ = 0;
   int send_period_ms_ = 0;
@@ -92,7 +93,7 @@ private:
     std::string_view controller_name, kuka_drivers_core::ControllerType controller_type);
   bool onJointDampingChangeRequest(const std::vector<double> & joint_damping);
   bool onJointStiffnessChangeRequest(const std::vector<double> & joint_stiffness);
-  void setFriConfiguration(int send_period_ms, int receive_multiplier) const;
+  void setFriConfiguration(int cycle_time, int receive_multiplier) const;
   void setImpedanceConfiguration(
     const rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr & pub,
     const std::vector<double> & stiffness, const std::vector<double> & damping) const;
