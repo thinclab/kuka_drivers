@@ -1,80 +1,31 @@
-## For installation instructions of this fork, see the [kuka_irl_project](https://github.com/thinclab/kuka_irl_project/tree/jazzy?tab=readme-ov-file#3-clone-this-package-into-your-ros2-workspace) repository
+# ROS2 KUKA Drivers Fork
 
-# ROS2 KUKA Drivers
+This fork is identical to the original `kuka_drivers` repository, except that it has some minor changes to work with the `kuka_kontrol` package.
 
-This repository contains ROS2 drivers for all KUKA operating systems.
+The original KUKA Drivers GitHub Repository and Documentation can be found at the links below.<br>
+[KUKA Drivers GitHub](https://github.com/kroshu/kuka_drivers)<br>
+[KUKA Drivers Documentation](https://github.com/kroshu/kuka_drivers/wiki)<br>
 
-ROS2 Distro | Branch | Github CI | SonarCloud
------------- | -------------- | -------------- | --------------
-**Jazzy** | [`master`](https://github.com/kroshu/kuka_drivers/tree/master) | [![Build Status](https://github.com/kroshu//kuka_drivers/actions/workflows/industrial_ci_jazzy.yml/badge.svg?branch=master)](https://github.com/kroshu/kuka_drivers/actions/workflows/industrial_ci_jazzy.yml?branch=master) | [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kroshu_kuka_drivers&metric=alert_status)](https://sonarcloud.io/dashboard?id=kroshu_kuka_drivers)
-**Humble** | [`humble`](https://github.com/kroshu/kuka_drivers/tree/humble) | [![Build Status](https://github.com/kroshu//kuka_drivers/actions/workflows/industrial_ci_humble.yml/badge.svg)](https://github.com/kroshu/kuka_drivers/actions/workflows/industrial_ci_humble.yml) | [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kroshu_kuka_drivers&metric=alert_status&branch=humble)](https://sonarcloud.io/dashboard?id=kroshu_kuka_drivers)
-
-## Requirements
-
-The drivers require a system with ROS installed. It is recommended to use Ubuntu 24.04 with ROS Jazzy.
-
-Additionally, there exists a ROS Humble version of the drivers, and its corresponding configuration can be found under the `humble` branch.
-
-It is also recommended to use a client machine with a real-time kernel, as all three drivers require cyclic, real-time communication. Due to the real-time requirement, Windows systems are not recommended and covered in the documentation.
+#### Table of Contents
+[Installation](#Installation)<br>
 
 ## Installation
+It is necessary to install the corresponding fork of the `kuka_robot_descriptions` repository alongside this forked driver package. The original and forked KUKA Robot Descriptions GitHub Repositories can be found at the links below.<br>
+[Original KUKA Robot Descriptions GitHub](https://github.com/kroshu/kuka_robot_descriptions)<br>
+[Forked KUKA Robot Descriptions GitHub](https://github.com/thinclab/kuka_robot_descriptions/tree/jazzy)<br>
 
-The driver is not available as a binary package, building from source is necessary.
+It is recommended to have a separate workspace for this driver and the robot descriptions repository to simplify the build process; use the commands below to create the `/kuka_ws` and to clone the forks into the `/src` directory.
 
-Create ROS2 workspace (if not already created).
+    mkdir -p ~/kuka_ws/src
+    cd ~/kuka_ws/src
+    git clone -b jazzy https://github.com/thinclab/kuka_drivers.git
+    git clone -b jazzy https://github.com/thinclab/kuka_robot_descriptions.git
 
-```bash
-mkdir -p ~/ros2_ws/src
-```
+After you have cloned the fork, go to `~/kuka_ws` and resolve dependencies.
 
-Clone KUKA ROS2 repositories.
+    cd ~/kuka_ws
+    rosdep install --from-paths src --ignore-src -r -y
 
-```bash
-cd ~/ros2_ws/src
-git clone https://github.com/kroshu/kuka_drivers.git
-vcs import < kuka_drivers/upstream.repos
-```
+Then, build the package in the workspace using the command below.
 
-Install and initialize rosdep (if not already done)
-
-```bash
-sudo apt install python3-rosdep
-sudo rosdep init
-```
-
-Install dependencies using `rosdep`.
-
-```bash
-cd ~/ros2_ws
-rosdep update
-sudo apt upgrade
-rosdep install --from-paths . --ignore-src --rosdistro $ROS_DISTRO -y
-```
-
-Build all packages in workspace.
-
-```bash
-cd ~/ros2_ws
-colcon build
-```
-
-Source workspace.
-
-```bash
-# Replace ".bash" with your shell if you're not using bash
-# Possible values are: setup.bash, setup.sh, setup.zsh
-source ~/ros2_ws/install/setup.bash
-```
-
-> [!NOTE]
-> As the `kuka_external_control_sdk` package is designed to work also outside of the ROS2 ecosystem, and is simply wrapped with a `package.xml` to simplify the setup, the following warnings are expected and can be ignored after sourcing:
-> ```
-> not found: "<WS>/install/kuka_external_control_sdk/share/kuka_external_control_sdk/local_setup.bash"
-> not found: "<WS>/install/kuka_external_control_sdk_examples/share/> kuka_external_control_sdk_examples/local_setup.bash"
-> ```
-
-## Getting Started
-
-Documentation of this project can be found on the repository's [Wiki](https://github.com/kroshu/kuka_drivers/wiki) page.
-
-If you find something confusing, not working, or would like to contribute, please read our [contributing guide](CONTRIBUTING.md) before opening an issue or creating a pull request.
+    MAKEFLAGS=`getconf _NPROCESSORS_ONLN` colcon build --continue-on-error --parallel-workers 4 --symlink-install --event-handlers desktop_notification- status- --cmake-args -DCMAKE_BUILD_TYPE=Release
