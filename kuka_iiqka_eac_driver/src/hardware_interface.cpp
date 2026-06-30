@@ -27,10 +27,12 @@
 
 namespace kuka_eac
 {
-CallbackReturn KukaEACHardwareInterface::on_init(
-  const hardware_interface::HardwareComponentInterfaceParams & params)
+CallbackReturn KukaEACHardwareInterface::on_init(const hardware_interface::HardwareInfo & info)
+// CallbackReturn KukaEACHardwareInterface::on_init(
+//   const hardware_interface::HardwareComponentInterfaceParams & params)
 {
-  if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
+  if (hardware_interface::SystemInterface::on_init(info) != CallbackReturn::SUCCESS)
+  // if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
   {
     return CallbackReturn::ERROR;
   }
@@ -38,7 +40,7 @@ CallbackReturn KukaEACHardwareInterface::on_init(
   // Initialize control mode with 'undefined', which should be changed by the appropriate controller
   // during configuration
   hw_position_states_.resize(info_.joints.size(), 0.0);
-  hw_commanded_position_states_.resize(info_.joints.size(), 0.0);
+  // hw_commanded_position_states_.resize(info_.joints.size(), 0.0);
   hw_torque_states_.resize(info_.joints.size(), 0.0);
   hw_position_commands_.resize(info_.joints.size(), 0.0);
   hw_torque_commands_.resize(info_.joints.size(), 0.0);
@@ -86,10 +88,10 @@ CallbackReturn KukaEACHardwareInterface::on_init(
       return CallbackReturn::ERROR;
     }
 
-    if (joint.state_interfaces.size() != 3)
+    if (joint.state_interfaces.size() != 2)
     {
       RCLCPP_FATAL(
-        rclcpp::get_logger("KukaEACHardwareInterface"), "expecting exactly 3 state interface");
+        rclcpp::get_logger("KukaEACHardwareInterface"), "expecting exactly 2 state interface");
       return CallbackReturn::ERROR;
     }
 
@@ -109,13 +111,13 @@ CallbackReturn KukaEACHardwareInterface::on_init(
       return CallbackReturn::ERROR;
     }
 
-    if (joint.state_interfaces[2].name != hardware_interface::HW_IF_COMMANDED_POSITION)
-    {
-      RCLCPP_FATAL(
-        rclcpp::get_logger("KukaEACHardwareInterface"),
-        "expecting 'COMMANDED_POSITION' state interface as third");
-      return CallbackReturn::ERROR;
-    }
+    // if (joint.state_interfaces[2].name != hardware_interface::HW_IF_COMMANDED_POSITION)
+    // {
+    //   RCLCPP_FATAL(
+    //     rclcpp::get_logger("KukaEACHardwareInterface"),
+    //     "expecting 'COMMANDED_POSITION' state interface as third");
+    //   return CallbackReturn::ERROR;
+    // }
   }
 
   RCLCPP_INFO(
@@ -139,9 +141,9 @@ std::vector<hardware_interface::StateInterface> KukaEACHardwareInterface::export
     state_interfaces.emplace_back(
       info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &hw_torque_states_[i]);
 
-    state_interfaces.emplace_back(
-      info_.joints[i].name, hardware_interface::HW_IF_COMMANDED_POSITION,
-      &hw_commanded_position_states_[i]);
+    // state_interfaces.emplace_back(
+    //   info_.joints[i].name, hardware_interface::HW_IF_COMMANDED_POSITION,
+    //   &hw_commanded_position_states_[i]);
   }
 
   state_interfaces.emplace_back(
@@ -266,9 +268,9 @@ return_type KukaEACHardwareInterface::read(const rclcpp::Time &, const rclcpp::D
         hw_position_states_.begin(), hw_position_states_.end(), hw_position_commands_.begin());
     }
 
-    std::copy(
-      hw_position_commands_.begin(), hw_position_commands_.end(),
-      hw_commanded_position_states_.begin());
+    // std::copy(
+    //   hw_position_commands_.begin(), hw_position_commands_.end(),
+    //   hw_commanded_position_states_.begin());
 
     cycle_count_++;
   }

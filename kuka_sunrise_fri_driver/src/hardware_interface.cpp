@@ -22,12 +22,12 @@
 namespace kuka_sunrise_fri_driver
 {
 CallbackReturn KukaFRIHardwareInterface::on_init(
-  const hardware_interface::HardwareComponentInterfaceParams & params)
+  const hardware_interface::HardwareInfo & system_info)
 {
   fri_connection_ =
     std::make_shared<FRIConnection>([this] { this->onError(); }, [this] { this->onError(); });
 
-  if (hardware_interface::SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
+  if (hardware_interface::SystemInterface::on_init(system_info) != CallbackReturn::SUCCESS)
   {
     return CallbackReturn::ERROR;
   }
@@ -138,13 +138,13 @@ CallbackReturn KukaFRIHardwareInterface::on_init(
         "expecting 'EXTERNAL_TORQUE' state interface as third");
       return CallbackReturn::ERROR;
     }
-    if (joint.state_interfaces[3].name != hardware_interface::HW_IF_COMMANDED_POSITION)
-    {
-      RCLCPP_FATAL(
-        rclcpp::get_logger("KukaFRIHardwareInterface"),
-        "expecting 'COMMANDED_POSITION' state interface as fourth");
-      return CallbackReturn::ERROR;
-    }
+    // if (joint.state_interfaces[3].name != hardware_interface::HW_IF_COMMANDED_POSITION)
+    // {
+    //   RCLCPP_FATAL(
+    //     rclcpp::get_logger("KukaFRIHardwareInterface"),
+    //     "expecting 'COMMANDED_POSITION' state interface as fourth");
+    //   return CallbackReturn::ERROR;
+    // }
   }
 
   RCLCPP_INFO(
@@ -474,9 +474,9 @@ std::vector<hardware_interface::StateInterface> KukaFRIHardwareInterface::export
     state_interfaces.emplace_back(
       info_.joints[i].name, hardware_interface::HW_IF_EXTERNAL_TORQUE, &hw_ext_torque_states_[i]);
 
-    state_interfaces.emplace_back(
-      info_.joints[i].name, hardware_interface::HW_IF_COMMANDED_POSITION,
-      &hw_commanded_position_states_[i]);
+    // state_interfaces.emplace_back(
+    //   info_.joints[i].name, hardware_interface::HW_IF_COMMANDED_POSITION,
+    //   &hw_commanded_position_states_[i]);
   }
 
   state_interfaces.emplace_back(

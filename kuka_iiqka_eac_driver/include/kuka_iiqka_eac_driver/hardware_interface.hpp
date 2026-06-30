@@ -46,7 +46,8 @@ public:
   RCLCPP_SHARED_PTR_DEFINITIONS(KukaEACHardwareInterface)
 
   KUKA_IIQKA_EAC_DRIVER_PUBLIC CallbackReturn
-  on_init(const hardware_interface::HardwareComponentInterfaceParams & params) override;
+  // on_init(const hardware_interface::HardwareComponentInterfaceParams & params) override;
+  on_init(const hardware_interface::HardwareInfo & info) override;
 
   KUKA_IIQKA_EAC_DRIVER_PUBLIC std::vector<hardware_interface::StateInterface>
   export_state_interfaces() override;
@@ -84,7 +85,7 @@ private:
   std::vector<double> hw_stiffness_commands_;
   std::vector<double> hw_damping_commands_;
   std::vector<double> hw_position_states_;
-  std::vector<double> hw_commanded_position_states_;  // State interface for commanded positions
+  // std::vector<double> hw_commanded_position_states_;  // State interface for commanded positions
   std::vector<double> hw_torque_states_;
 
   double hw_control_mode_command_ = 0;

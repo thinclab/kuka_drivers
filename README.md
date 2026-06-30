@@ -2,7 +2,7 @@
 
 This fork is identical to the original `kuka_drivers` repository, except that it has some minor changes to work with the `kuka_kontrol` package.
 
-The original KUKA Drivers GitHub Repository and Documentation can be found at the links below.<br>
+The original KUKA Drivers GitHub Repository and Documentation can be found at the link below.<br>
 [KUKA Drivers GitHub](https://github.com/kroshu/kuka_drivers)<br>
 [KUKA Drivers Documentation](https://github.com/kroshu/kuka_drivers/wiki)<br>
 
@@ -29,3 +29,11 @@ After you have cloned the fork, go to `~/kuka_ws` and resolve dependencies.
 Then, build the package in the workspace using the command below.
 
     MAKEFLAGS=`getconf _NPROCESSORS_ONLN` colcon build --continue-on-error --parallel-workers 4 --symlink-install --event-handlers desktop_notification- status- --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+Make sure to source your workspace if you plan to utilize these repositories.
+
+    source ~/kuka_ws/install/setup.bash
+
+ You can add the `source` command to your `~/.bashrc` using the commands below so that this happens automatically when you open a new terminal.
+
+    echo "source ~/cam_ws/install/setup.bash" >> ~/.bashrc

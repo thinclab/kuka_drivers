@@ -83,6 +83,13 @@ def launch_setup(context, *args, **kwargs):
                     robot_urdf_filepath.perform(context).split("/")[2],
                 ]
             ),
+            # PathJoinSubstitution(
+            #     [
+            #         FindPackageShare("kuka_lbr_iisy_support"),
+            #         "urdf",
+            #         robot_model.perform(context) + ".urdf.xacro",
+            #     ]
+            # ),
             " ",
             "mode:=",
             mode,
@@ -122,6 +129,18 @@ def launch_setup(context, *args, **kwargs):
             " ",
             "qos_config_file:=",
             qos_config,
+            " ",           #
+            "use_gpio:=",
+            "false",
+            " ",
+            "client_port:=",
+            "0",
+            " ",
+            "mxa_client_port:=",
+            "0",
+            " ",
+            "verify_robot_model:=",
+            "true",          #
         ],
         on_stderr="capture",
     )
@@ -145,6 +164,7 @@ def launch_setup(context, *args, **kwargs):
                 "cpu_affinity": int(rt_core.perform(context)),
                 "thread_priority": int(rt_prio.perform(context)),
                 "lock_memory": lock_memory.perform(context) == "true",
+                # "lock_memory": False,
                 "hardware_components_initial_state": {
                     "unconfigured": [tf_prefix + robot_model.perform(context)]
                 },
@@ -281,7 +301,7 @@ def generate_launch_description():
     launch_arguments.append(
         DeclareLaunchArgument(
             "rt_prio",
-            default_value="70",
+            default_value="20",
             description=("The priority of the thread that runs the control loop"),
         )
     )
